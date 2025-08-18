@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Named Entity & Event Extraction System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1><i class="fas fa-search"></i> Named Entity & Event Extraction System</h1>
+            <p class="subtitle">News Media Domain - Extract entities and events from text</p>
+        </header>
+
+        <div class="main-content">
+            <!-- Input Section -->
+            <div class="input-section">
+                <div class="input-controls">
+                    <div class="control-group">
+                        <label for="text-input">Input Text:</label>
+                        <textarea id="text-input" placeholder="Enter or paste your news text here..." rows="8"></textarea>
+                        <div class="input-buttons">
+                            <button id="sample-text-btn" class="btn btn-secondary">
+                                <i class="fas fa-newspaper"></i> Load Sample Text
+                            </button>
+                            <button id="clear-btn" class="btn btn-outline">
+                                <i class="fas fa-trash"></i> Clear
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label>File Upload:</label>
+                        <label for="file-input" class="file-upload-area" id="file-upload-area">
+                            <input type="file" id="file-input" accept=".txt,.pdf,.docx">
+                            <div class="upload-placeholder">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p>Drop files here or <span class="upload-link">browse</span></p>
+                                <small>Supports: TXT, PDF, DOCX (Max 16MB)</small>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="extraction-controls">
+                    <div class="control-group">
+                        <label>Entity Types:</label>
+                        <div class="entity-checkboxes" id="entity-checkboxes">
+                            {% for entity_type, config in entity_types.items() %}
+                            <label class="checkbox-label">
+                                <input type="checkbox" value="{{ entity_type }}" checked>
+                                <span class="entity-badge" style="background-color: {{ config.color }}">
+                                    {{ entity_type }}
+                                </span>
+                                <small>{{ config.description }}</small>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="extract-events" checked>
+                            <span>Extract Events</span>
+                            <small>Identify significant events and incidents</small>
+                        </label>
+                    </div>
+
+                    <button id="extract-btn" class="btn btn-primary">
+                        <i class="fas fa-cogs"></i> Extract Entities & Events
+                    </button>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="results-section" id="results-section" style="display: none;">
+                <div class="results-header">
+                    <h2><i class="fas fa-list-alt"></i> Extraction Results</h2>
+                    <div class="export-buttons">
+                        <button class="btn btn-outline" onclick="exportResults('json')">
+                            <i class="fas fa-download"></i> JSON
+                        </button>
+                        <button class="btn btn-outline" onclick="exportResults('csv')">
+                            <i class="fas fa-table"></i> CSV
+                        </button>
+                        <button class="btn btn-outline" onclick="exportResults('txt')">
+                            <i class="fas fa-file-alt"></i> Report
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Statistics Panel -->
+                <div class="stats-panel" id="stats-panel">
+                    <div class="stat-card">
+                        <i class="fas fa-tags"></i>
+                        <div>
+                            <span class="stat-number" id="entity-count">0</span>
+                            <span class="stat-label">Entities</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-calendar-alt"></i>
+                        <div>
+                            <span class="stat-number" id="event-count">0</span>
+                            <span class="stat-label">Events</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-clock"></i>
+                        <div>
+                            <span class="stat-number" id="processing-time">0</span>
+                            <span class="stat-label">Processing Time (s)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Highlighted Text -->
+                <div class="highlighted-text-container">
+                    <h3><i class="fas fa-highlighter"></i> Highlighted Text</h3>
+                    <div class="legend">
+                        <span class="legend-item">Legend:</span>
+                        {% for entity_type, config in entity_types.items() %}
+                        <span class="legend-badge" style="background-color: {{ config.color }}">
+                            {{ entity_type }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                    <div id="highlighted-text" class="highlighted-text"></div>
+                </div>
+
+                <!-- Filter Controls -->
+                <div class="filter-controls">
+                    <h3><i class="fas fa-filter"></i> Filter Results</h3>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" onclick="filterResults('all')">All</button>
+                        <button class="filter-btn" onclick="filterResults('entities')">Entities Only</button>
+                        <button class="filter-btn" onclick="filterResults('events')">Events Only</button>
+                    </div>
+                    <div class="confidence-filter">
+                        <label>Minimum Confidence:</label>
+                        <input type="range" id="confidence-slider" min="0" max="1" step="0.1" value="0" onchange="filterByConfidence(this.value)">
+                        <span id="confidence-value">0.0</span>
+                    </div>
+                </div>
+
+                <!-- Detailed Results -->
+                <div class="detailed-results">
+                    <!-- Entities Tab -->
+                    <div class="results-tab">
+                        <div class="tab-header" onclick="toggleTab('entities-tab')">
+                            <h3><i class="fas fa-tags"></i> Entities <span id="entities-count-badge" class="count-badge">0</span></h3>
+                            <i class="fas fa-chevron-down tab-arrow"></i>
+                        </div>
+                        <div class="tab-content" id="entities-tab">
+                            <div id="entities-list" class="results-list"></div>
+                        </div>
+                    </div>
+
+                    <!-- Events Tab -->
+                    <div class="results-tab">
+                        <div class="tab-header" onclick="toggleTab('events-tab')">
+                            <h3><i class="fas fa-calendar-alt"></i> Events <span id="events-count-badge" class="count-badge">0</span></h3>
+                            <i class="fas fa-chevron-down tab-arrow"></i>
+                        </div>
+                        <div class="tab-content" id="events-tab">
+                            <div id="events-list" class="results-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay" style="display: none;">
+            <div class="spinner"></div>
+            <p>Processing text...</p>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container" class="toast-container"></div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
