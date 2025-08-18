@@ -1,0 +1,41 @@
+# --- Python Virtual Environment ---
+# Never commit your virtual environment folder. It's machine-specific.
+my_env/
+venv/
+.venv/
+env/
+
+# --- Python Artifacts ---
+# Ignore byte-compiled files, caches, and logs.
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.exe
+
+# --- Project-Specific ---
+# Ignore the folder for user-uploaded files.
+/static/uploads/
+
+# Ignore environment variables files which may contain secrets.
+.env
+*.env
+
+# --- IDE / Editor Configuration ---
+# Ignore user-specific settings from popular editors.
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# --- Operating System Files ---
+# Ignore system-generated files.
+.DS_Store
+Thumbs.db
+
+# --- Distribution / Packaging ---
+# Ignore build artifacts.
+build/
+dist/
+*.egg-info/
