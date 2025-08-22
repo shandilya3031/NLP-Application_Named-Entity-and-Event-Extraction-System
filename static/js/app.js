@@ -40,7 +40,7 @@ function initializeFileUpload() {
     // File input change
     fileInput.addEventListener('change', function(e) {
         if (e.target.files.length > 0) {
-            handleFileUpload(e.target.files[0]);
+            handleFileUpload(e.target.files);
         }
     });
 
@@ -60,7 +60,7 @@ function initializeFileUpload() {
         this.classList.remove('dragover');
         
         if (e.dataTransfer.files.length > 0) {
-            handleFileUpload(e.dataTransfer.files[0]);
+            handleFileUpload(e.dataTransfer.files);
         }
     });
 
@@ -71,36 +71,48 @@ function initializeFileUpload() {
 }
 
 // Handle file upload
-async function handleFileUpload(file) {
+async function handleFileUpload(files) {
     const maxSize = 16 * 1024 * 1024; // 16MB
-    const allowedTypes = ['text/plain', 'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    
-    if (file.size > maxSize) {
-        showToast('File too large. Maximum size is 16MB.', 'error');
+    const allowedExtensions = ['.txt', '.pdf', '.docx'];
+    const formData = new FormData();
+    let validFilesCount = 0;
+
+    for (const file of files) {
+        const extension = '.' + file.name.split('.').pop().toLowerCase();
+
+        if (file.size > maxSize) {
+            showToast(`Skipping "${file.name}": File too large (Max 16MB).`, 'error');
+            continue; // Skip to the next file
+        }
+
+        if (!allowedExtensions.includes(extension)) {
+            showToast(`Skipping "${file.name}": Unsupported file type.`, 'error');
+            continue; // Skip to the next file
+        }
+
+        // Add the valid file to the form data. Use 'files' as the key.
+        formData.append('files', file);
+        validFilesCount++;
+    }
+
+    if (validFilesCount === 0) {
+        showToast('No valid files were selected for upload.', 'info');
         return;
     }
-    
-    if (!allowedTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.txt')) {
-        showToast('Unsupported file type. Please upload TXT, PDF, or DOCX files.', 'error');
-        return;
-    }
-    
+
     showLoading(true);
-    
+
     try {
-        const formData = new FormData();
-        formData.append('file', file);
-        
         const response = await fetch('/api/upload', {
             method: 'POST',
             body: formData
         });
-        
+
         const result = await response.json();
-        
+
         if (response.ok) {
             textInput.value = result.full_content;
-            showToast(`File "${result.filename}" uploaded successfully!`, 'success');
+            showToast(`${result.filenames.length} file(s) uploaded successfully!`, 'success');
             extractBtn.disabled = false;
         } else {
             throw new Error(result.error || 'Upload failed');

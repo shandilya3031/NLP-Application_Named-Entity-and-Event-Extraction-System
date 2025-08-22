@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, Response 
 import os
 import json
 import hashlib
@@ -29,18 +29,6 @@ def get_cache_key(text, entity_types):
     """Generate cache key for text processing results"""
     content = text + str(sorted(entity_types) if entity_types else [])
     return hashlib.md5(content.encode()).hexdigest()
-
-# def read_file_content(file_path):
-#     """Read content from uploaded file"""
-#     try:
-#         with open(file_path, 'r', encoding='utf-8') as file:
-#             return file.read()
-#     except UnicodeDecodeError:
-#         # Try with different encoding
-#         with open(file_path, 'r', encoding='latin-1') as file:
-#             return file.read()
-
-# Replace the old read_file_content function in app.py with this one
 
 def read_file_content(file_path):
     """Read content from uploaded file, handling TXT, PDF, and DOCX."""
@@ -129,39 +117,42 @@ def extract_entities():
 
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
-    """API endpoint for file upload and processing"""
+    """API endpoint for multiple file uploads and processing"""
     try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
+        uploaded_files = request.files.getlist('files')
         
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+        if not uploaded_files or all(f.filename == '' for f in uploaded_files):
+            return jsonify({'error': 'No files provided'}), 400
         
-        if not allowed_file(file.filename):
-            return jsonify({'error': f'File type not allowed. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}'}), 400
-        
-        # Save file
-        filename = secure_filename(file.filename)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
-        filename = timestamp + filename
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        all_content = []
+        processed_filenames = []
         
         os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-        file.save(filepath)
         
-        # Read file content
-        content = read_file_content(filepath)
-        
-        # Clean up uploaded file
-        os.remove(filepath)
+        for file in uploaded_files:
+            if file and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                
+                # Save, read, and then delete the temporary file
+                file.save(filepath)
+                content = read_file_content(filepath)
+                os.remove(filepath)
+                
+                all_content.append(content)
+                processed_filenames.append(file.filename)
+
+        if not all_content:
+            return jsonify({'error': f'No valid files found. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}'}), 400
+            
+        # Join the content of all files with a separator
+        full_text = "\n\n--- End of File ---\n\n".join(all_content)
         
         return jsonify({
             'success': True,
-            'filename': file.filename,
-            'content': content[:10000],  # Limit to first 10K chars for display
-            'full_content': content,
-            'size': len(content)
+            'filenames': processed_filenames,
+            'full_content': full_text,
+            'size': len(full_text)
         })
     
     except Exception as e:
@@ -244,7 +235,7 @@ def export_results():
             return jsonify({'error': 'Unsupported export format'}), 400
     
     except Exception as e:
-        return jsonify({'error': f'Export error: {str(e)}'}), 500
+        return jsonify({'error': f'Export error: {str(e)}'}), 500  
 
 @app.route('/api/sample-text')
 def get_sample_text():
